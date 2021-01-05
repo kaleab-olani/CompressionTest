@@ -29,19 +29,23 @@ android {
 }
 repositories {
     maven { url 'https://jitpack.io' }
+    jcenter()
 }
 dependencies {
 
     implementation 'androidx.appcompat:appcompat:1.2.0'
     implementation 'com.google.android.material:material:1.2.1'
     implementation 'androidx.constraintlayout:constraintlayout:2.0.4'
+
 //    implementation 'com.iceteck.silicompressorr:silicompressor:2.0'
     implementation 'com.github.clemp6r.futuroid:futuroid:1.0.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.0'
-//    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.4.0'
-//    implementation 'com.github.AbedElazizShe:LightCompressor:0.7.7'
+    implementation 'com.github.AbedElazizShe:LightCompressor:0.7.7'
     implementation 'com.github.WindSekirun:MediaResizer:1.1.0'
 
+    implementation 'net.ypresto.androidtranscoder:android-transcoder:0.2.0'
+
+//    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.4.0'
     testImplementation 'junit:junit:4.13.1'
     androidTestImplementation 'androidx.test.ext:junit:1.1.2'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'

@@ -1,39 +1,40 @@
 package com.app.kol.compressiontest;
 
 import android.Manifest;
-import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
-//import android.support.v4.app.ActivityCompat;
-//import android.support.v4.content.ContextCompat;
-//import android.support.v7.app.AppCompatActivity;
-//import android.support.v7.widget.Toolbar;
 import android.util.Log;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-//import com.abedelazizshe.lightcompressorlibrary.CompressionListener;
-//import com.abedelazizshe.lightcompressorlibrary.VideoCompressor;
-//import com.abedelazizshe.lightcompressorlibrary.VideoQuality;
-
 import com.google.android.material.button.MaterialButton;
+
+import net.ypresto.androidtranscoder.MediaTranscoder;
+import net.ypresto.androidtranscoder.engine.InvalidOutputFormatException;
 
 import java.io.File;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.net.URISyntaxException;
+import java.util.Objects;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
+
+//import android.support.v4.app.ActivityCompat;
+//import android.support.v4.content.ContextCompat;
+//import android.support.v7.app.AppCompatActivity;
+//import android.support.v7.widget.Toolbar;
+//import com.abedelazizshe.lightcompressorlibrary.CompressionListener;
+//import com.abedelazizshe.lightcompressorlibrary.VideoCompressor;
+//import com.abedelazizshe.lightcompressorlibrary.VideoQuality;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -44,14 +45,15 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_TAKE_VIDEO = 200;
     private static final int TYPE_VIDEO = 2;
     private static final int MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE = 3;
+    private static final int REQUEST_TAKE_GALLERY_VIDEO = 4;
 
-    String mCurrentPhotoPath;
+    String videoPath = "";
+    String compressedVideoPath = "";
     Uri capturedUri = null;
     Uri compressUri = null;
-    ImageView imageView;
-    TextView picDescription;
+
     MaterialButton selectFile, startCompress;
-    LinearLayout compressionMsg;
+
     private TextView progress;
     private TextView fileName;
 
@@ -64,7 +66,7 @@ public class MainActivity extends AppCompatActivity {
         progress = findViewById(R.id.progress);
         fileName = findViewById(R.id.fileName);
         startCompress = findViewById(R.id.compress);
-        startCompress.setOnClickListener(view -> compress(capturedUri.toString(), compressUri.toString()));
+        startCompress.setOnClickListener(view -> { compress(videoPath); });
     }
 
     /**
@@ -82,7 +84,8 @@ public class MainActivity extends AppCompatActivity {
                         new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
                         MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE);
         } else{
-            dispatchTakeVideoIntent();
+//            dispatchTakeVideoIntent();
+            pickFromGallery();
         }
     }
 
@@ -106,129 +109,123 @@ public class MainActivity extends AppCompatActivity {
                 // If request is cancelled, the result arrays are empty.
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     Toast.makeText(this, "read permission granted.", Toast.LENGTH_LONG).show();
-                    return;
                 }
                 else{
                     Toast.makeText(this, "You need enable the permission for External Storage read" +
                             " to test out this library.", Toast.LENGTH_LONG).show();
-                    return;
                 }
             }
             default:
         }
     }
 
-    private File createMediaFile(int type) throws IOException {
+    private File createMediaFile() throws IOException {
 
         // Create an image file name
-//        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        String timeStamp = SimpleDateFormat.getDateInstance().format(new Date());
-        String fileName = type == 1 ? "JPEG_" + timeStamp + "_" : "VID_" + timeStamp + "_";
-        File storageDir = Environment.getExternalStoragePublicDirectory(
-                type == 1 ? Environment.DIRECTORY_PICTURES : Environment.DIRECTORY_MOVIES);
-        File file = File.createTempFile(
-                fileName,  /* prefix */
-                type == 1 ? ".jpg" : ".mp4",         /* suffix */
-                storageDir      /* directory */
-        );
-
-        // Save a file: path for use with ACTION_VIEW intents
-        mCurrentPhotoPath = "file:" + file.getAbsolutePath();
-        Log.d(TAG, "mCurrentPhotoPath: " + mCurrentPhotoPath);
-        return file;
+        String timeStamp = String.valueOf(System.currentTimeMillis());
+        String fileName = "VID_" + timeStamp + "_";
+        File storageDir = getExternalFilesDir(Environment.DIRECTORY_MOVIES);
+        return File.createTempFile(fileName, ".mp4", getCacheDir());
+    }
+    public void pickFromGallery(){
+        Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Video.Media.EXTERNAL_CONTENT_URI);
+        startActivityForResult(Intent.createChooser(intent,"Select Video"),REQUEST_TAKE_GALLERY_VIDEO);
     }
 
-    @SuppressLint("QueryPermissionsNeeded")
     private void dispatchTakeVideoIntent() {
         Intent takeVideoIntent = new Intent(MediaStore.ACTION_VIDEO_CAPTURE);
         if (takeVideoIntent.resolveActivity(getPackageManager()) != null) {
             try {
 
-                takeVideoIntent.putExtra(MediaStore.EXTRA_DURATION_LIMIT, 10);
+                takeVideoIntent.putExtra(MediaStore.EXTRA_DURATION_LIMIT, 25);
                 takeVideoIntent.putExtra(MediaStore.EXTRA_VIDEO_QUALITY, 1);
-                capturedUri = FileProvider.getUriForFile(this, this.getApplicationContext().getPackageName() + ".provider", createMediaFile(TYPE_VIDEO));
+                File mediaFile = createMediaFile();
+                capturedUri = FileProvider.getUriForFile(Objects.requireNonNull(getApplicationContext()),
+                        BuildConfig.APPLICATION_ID + ".provider", mediaFile);
 
-                takeVideoIntent.putExtra(MediaStore.EXTRA_OUTPUT, capturedUri);
-                Log.d(TAG, "VideoUri: "  + capturedUri.toString());
+//                capturedUri = FileProvider.getUriForFile(this, this.getApplicationContext().getPackageName() BuildConfig.APPLICATION_ID + ".provider",, mediaFile);
+//                Log.i(TAG, "dispatchTakeVideoIntent: file = " + mediaFile.getAbsolutePath());
+                Log.i(TAG, "dispatchTakeVideoIntent: provider = " + capturedUri.getPath());
+
+                takeVideoIntent.putExtra(MediaStore.EXTRA_OUTPUT, capturedUri.getPath());
                 startActivityForResult(takeVideoIntent, REQUEST_TAKE_VIDEO);
             } catch (IOException e) {
                 e.printStackTrace();
             }
-
         }
-
-
     }
 
     // Method which will process the captured image
     @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
+    public void onActivityResult(int requestCode, int resultCode, Intent intent) {
+        super.onActivityResult(requestCode, resultCode, intent);
 
         if (requestCode == REQUEST_TAKE_VIDEO && resultCode == RESULT_OK){
-            if (data.getData() != null) {
-                Log.i(TAG, "onActivityResult: " + data.getData().toString());
-                fileName.setText(data.getData().toString());
-                capturedUri = data.getData();
-                //create destination directory
-                File f = new File(Environment.getExternalStorageDirectory().getAbsolutePath() );//+ "/" + getPackageName() + "/media/videos"
-                if (f.mkdirs() || f.isDirectory()){
-                    compressUri = Uri.fromFile(f);
-                    //compress and output new video specs
-//                    new VideoCompressAsyncTask(this).execute(data.getData().toString(), f.getPath());
-
-//                    VideoCompressorWithSili compressor = new VideoCompressorWithSili(this.getApplicationContext());
-//                    compressor.compressVideo(data.getData().toString(),f.getAbsolutePath()).addCallback(new FutureCallback<String>() {
-//                        @Override
-//                        public void onSuccess(String compressedFile) {
-//                            // display the image
-//                            Log.i(TAG, "onSuccess: " + compressedFile);
-//
-//                        }
-//
-//                        @Override
-//                        public void onFailure(Throwable t) {
-//                            Log.e(TAG, "Unable to download image", t);
-//                        }
-//                    });
-                }
+            Uri data = intent.getData();
+            if (data != null) {
+//                File cvideo = new File(data.getPath());
+                Log.i(TAG, "onActivityResult: " + data.getPath());
+                fileName.setText(data.getPath());
+                videoPath = data.getPath();
+            }
+        }else if (requestCode == REQUEST_TAKE_GALLERY_VIDEO && resultCode == Activity.RESULT_OK) {
+            capturedUri = intent.getData();
+//            videoPath = capturedUri.getPath();
+            try {
+                videoPath = VideoCompressorWithSili.getPath(this,capturedUri);
+                fileName.setText(videoPath);
+            } catch (URISyntaxException e) {
+                e.printStackTrace();
             }
         }
     }
-    void compress(String videoFile, String destFile){
-//        VideoCompressor.start(videoFile, destFile, new CompressionListener() {
+    void compress(String videoFile){
+        try{
+            VideoCompressorWithSili.transcodeVideo(this,capturedUri, getListener());
+        }catch (InvalidOutputFormatException e){
+            Log.e(TAG, "compress: ", e );
+        }
+
+//        VideoCompressorWithSili.compressWithVideoResize(videoFile,this.getApplicationContext());
+
+//        progress.setText("Compressing...");
+//        VideoCompressorWithSili compressorWithSili = new VideoCompressorWithSili(this);
+//        compressorWithSili.compressVideo(videoFile).addCallback(new FutureCallback<String>() {
 //            @Override
-//            public void onStart() {
-//                // Compression start
+//            public void onSuccess(String result) {
+//                progress.setText("compressed!");
 //            }
 //
 //            @Override
-//            public void onSuccess() {
-//                // On Compression success
-//                progress.setText("Done.");
+//            public void onFailure(Throwable t) {
+//                progress.setText("failed");
+//                Log.e(TAG, "onFailure: ",t );
 //            }
-//
-//            @Override
-//            public void onFailure(String failureMessage) {
-//                // On Failure
-//                Log.e(TAG, "onFailure: " + failureMessage);
-//            }
-//
-//            @Override
-//            public void onProgress(float v) {
-//                // Update UI with progress value
-//                runOnUiThread(new Runnable() {
-//                    public void run() {
-//                        progress.setText(String.format("%s%%", v));
-//                    }
-//                });
-//            }
-//
-//            @Override
-//            public void onCancelled() {
-//                // On Cancelled
-//            }
-//        }, VideoQuality.MEDIUM, true, true);
-        VideoCompressorWithSili.compressWithVideoResize(videoFile);
+//        });
+
+    }
+
+    private MediaTranscoder.Listener getListener() {
+        return new MediaTranscoder.Listener() {
+            @Override
+            public void onTranscodeProgress(double progressV) {
+                progress.setText(String.valueOf(progressV));
+            }
+            @Override
+            public void onTranscodeCompleted() {
+                progress.setText("Completed!");
+            }
+            @Override
+            public void onTranscodeCanceled() {
+
+                progress.setText("Canceled!");
+            }
+
+            @Override
+            public void onTranscodeFailed(Exception exception) {
+                progress.setText("Failed!");
+                Log.e(TAG, "onTranscodeFailed: ",exception );
+            }
+        };
     }
 }
