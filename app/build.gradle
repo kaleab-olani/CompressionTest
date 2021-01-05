@@ -39,8 +39,8 @@ dependencies {
     implementation 'com.github.clemp6r.futuroid:futuroid:1.0.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.0'
 //    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.4.0'
-    implementation 'com.github.AbedElazizShe:LightCompressor:0.7.7'
-
+//    implementation 'com.github.AbedElazizShe:LightCompressor:0.7.7'
+    implementation 'com.github.WindSekirun:MediaResizer:1.1.0'
 
     testImplementation 'junit:junit:4.13.1'
     androidTestImplementation 'androidx.test.ext:junit:1.1.2'

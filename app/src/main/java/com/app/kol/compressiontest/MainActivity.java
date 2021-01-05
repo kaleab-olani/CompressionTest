@@ -13,16 +13,15 @@ import android.provider.MediaStore;
 //import android.support.v7.app.AppCompatActivity;
 //import android.support.v7.widget.Toolbar;
 import android.util.Log;
-import android.view.View;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.abedelazizshe.lightcompressorlibrary.CompressionListener;
-import com.abedelazizshe.lightcompressorlibrary.VideoCompressor;
-import com.abedelazizshe.lightcompressorlibrary.VideoQuality;
-import com.github.clemp6r.futuroid.FutureCallback;
+//import com.abedelazizshe.lightcompressorlibrary.CompressionListener;
+//import com.abedelazizshe.lightcompressorlibrary.VideoCompressor;
+//import com.abedelazizshe.lightcompressorlibrary.VideoQuality;
+
 import com.google.android.material.button.MaterialButton;
 
 import java.io.File;
@@ -42,17 +41,16 @@ public class MainActivity extends AppCompatActivity {
 
     private static final int REQUEST_TAKE_CAMERA_PHOTO = 1;
     private static final int MY_PERMISSIONS_REQUEST_WRITE_STORAGE = 1;
-    private static final int MY_PERMISSIONS_REQUEST_WRITE_STORAGE_VID = 2;
     private static final int REQUEST_TAKE_VIDEO = 200;
-    private static final int TYPE_IMAGE = 1;
     private static final int TYPE_VIDEO = 2;
+    private static final int MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE = 3;
 
     String mCurrentPhotoPath;
     Uri capturedUri = null;
     Uri compressUri = null;
     ImageView imageView;
     TextView picDescription;
-    MaterialButton selectFile;
+    MaterialButton selectFile, startCompress;
     LinearLayout compressionMsg;
     private TextView progress;
     private TextView fileName;
@@ -65,6 +63,8 @@ public class MainActivity extends AppCompatActivity {
         selectFile.setOnClickListener(view -> requestPermissions(TYPE_VIDEO));
         progress = findViewById(R.id.progress);
         fileName = findViewById(R.id.fileName);
+        startCompress = findViewById(R.id.compress);
+        startCompress.setOnClickListener(view -> compress(capturedUri.toString(), compressUri.toString()));
     }
 
     /**
@@ -73,24 +73,16 @@ public class MainActivity extends AppCompatActivity {
     private void requestPermissions(int mediaType){
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
-            if (mediaType == TYPE_IMAGE){
                 ActivityCompat.requestPermissions(this,
                         new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
                         MY_PERMISSIONS_REQUEST_WRITE_STORAGE);
-            }
-            else {
+        } else if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this,
-                        new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
-                        MY_PERMISSIONS_REQUEST_WRITE_STORAGE_VID);
-            }
-
-        }
-        else{
-            if (mediaType == TYPE_VIDEO){
-                // Want to compress a video
-                dispatchTakeVideoIntent();
-            }
-
+                        new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
+                        MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE);
+        } else{
+            dispatchTakeVideoIntent();
         }
     }
 
@@ -99,7 +91,7 @@ public class MainActivity extends AppCompatActivity {
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         switch (requestCode) {
 
-            case MY_PERMISSIONS_REQUEST_WRITE_STORAGE_VID: {
+            case MY_PERMISSIONS_REQUEST_WRITE_STORAGE: {
                 // If request is cancelled, the result arrays are empty.
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     dispatchTakeVideoIntent();
@@ -110,6 +102,17 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
                 break;
+            }case MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE: {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    Toast.makeText(this, "read permission granted.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                else{
+                    Toast.makeText(this, "You need enable the permission for External Storage read" +
+                            " to test out this library.", Toast.LENGTH_LONG).show();
+                    return;
+                }
             }
             default:
         }
@@ -144,7 +147,7 @@ public class MainActivity extends AppCompatActivity {
                 takeVideoIntent.putExtra(MediaStore.EXTRA_DURATION_LIMIT, 10);
                 takeVideoIntent.putExtra(MediaStore.EXTRA_VIDEO_QUALITY, 1);
                 capturedUri = FileProvider.getUriForFile(this, this.getApplicationContext().getPackageName() + ".provider", createMediaFile(TYPE_VIDEO));
-                fileName.setText(capturedUri.toString());
+
                 takeVideoIntent.putExtra(MediaStore.EXTRA_OUTPUT, capturedUri);
                 Log.d(TAG, "VideoUri: "  + capturedUri.toString());
                 startActivityForResult(takeVideoIntent, REQUEST_TAKE_VIDEO);
@@ -165,12 +168,15 @@ public class MainActivity extends AppCompatActivity {
         if (requestCode == REQUEST_TAKE_VIDEO && resultCode == RESULT_OK){
             if (data.getData() != null) {
                 Log.i(TAG, "onActivityResult: " + data.getData().toString());
+                fileName.setText(data.getData().toString());
+                capturedUri = data.getData();
                 //create destination directory
                 File f = new File(Environment.getExternalStorageDirectory().getAbsolutePath() );//+ "/" + getPackageName() + "/media/videos"
                 if (f.mkdirs() || f.isDirectory()){
+                    compressUri = Uri.fromFile(f);
                     //compress and output new video specs
 //                    new VideoCompressAsyncTask(this).execute(data.getData().toString(), f.getPath());
-                    compress(data.getData().toString(), f.getAbsoluteFile());
+
 //                    VideoCompressorWithSili compressor = new VideoCompressorWithSili(this.getApplicationContext());
 //                    compressor.compressVideo(data.getData().toString(),f.getAbsolutePath()).addCallback(new FutureCallback<String>() {
 //                        @Override
@@ -186,45 +192,43 @@ public class MainActivity extends AppCompatActivity {
 //                        }
 //                    });
                 }
-
             }
         }
     }
-    void compress(String videoFile, File destFile){
-        VideoCompressor.start(videoFile, destFile.getPath(), new CompressionListener() {
-            @Override
-            public void onStart() {
-                // Compression start
-
-            }
-
-            @Override
-            public void onSuccess() {
-                // On Compression success
-                progress.setText("Done.");
-            }
-
-            @Override
-            public void onFailure(String failureMessage) {
-                // On Failure
-                Log.e(TAG, "onFailure: " + failureMessage);
-            }
-
-            @Override
-            public void onProgress(float v) {
-                // Update UI with progress value
-                runOnUiThread(new Runnable() {
-                    public void run() {
-                        progress.setText(String.format("%s%%", v));
-                    }
-                });
-            }
-
-            @Override
-            public void onCancelled() {
-                // On Cancelled
-            }
-        }, VideoQuality.MEDIUM, false, false);
-
+    void compress(String videoFile, String destFile){
+//        VideoCompressor.start(videoFile, destFile, new CompressionListener() {
+//            @Override
+//            public void onStart() {
+//                // Compression start
+//            }
+//
+//            @Override
+//            public void onSuccess() {
+//                // On Compression success
+//                progress.setText("Done.");
+//            }
+//
+//            @Override
+//            public void onFailure(String failureMessage) {
+//                // On Failure
+//                Log.e(TAG, "onFailure: " + failureMessage);
+//            }
+//
+//            @Override
+//            public void onProgress(float v) {
+//                // Update UI with progress value
+//                runOnUiThread(new Runnable() {
+//                    public void run() {
+//                        progress.setText(String.format("%s%%", v));
+//                    }
+//                });
+//            }
+//
+//            @Override
+//            public void onCancelled() {
+//                // On Cancelled
+//            }
+//        }, VideoQuality.MEDIUM, true, true);
+        VideoCompressorWithSili.compressWithVideoResize(videoFile);
     }
 }
